@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import engineer.cookie.focusmode.AppGraph
 import engineer.cookie.focusmode.R
 import engineer.cookie.focusmode.ui.MainActivity
+import kotlinx.coroutines.launch
 
 /**
  * Foreground service that keeps Focus Mode represented by a silent, ongoing
@@ -35,6 +36,9 @@ class FocusModeService : Service() {
                 startForeground(NOTIFICATION_ID, buildNotification())
                 // Re-apply the policy defensively in case the system reset it.
                 AppGraph.dndController.enable()
+                AppGraph.applicationScope.launch {
+                    AppGraph.appSuspendController.suspendUserApps()
+                }
                 return START_STICKY
             }
         }

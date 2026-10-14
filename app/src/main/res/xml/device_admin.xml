@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Device administrator policies. Focus Mode only needs to be the device owner
+     so it can suspend other user apps; no specific admin policy is required, but
+     the policies below keep the admin declaration meaningful. -->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>

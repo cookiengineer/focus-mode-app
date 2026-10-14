@@ -8,6 +8,9 @@ import engineer.cookie.focusmode.dnd.ContactStarManager
 import engineer.cookie.focusmode.dnd.DndController
 import engineer.cookie.focusmode.focus.FocusModeController
 import engineer.cookie.focusmode.focus.FocusModePreferences
+import engineer.cookie.focusmode.freeze.AppCatalog
+import engineer.cookie.focusmode.freeze.AppSuspendController
+import engineer.cookie.focusmode.freeze.KeepAliveRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,8 +35,21 @@ object AppGraph {
     val dndController: DndController by lazy {
         DndController(appContext, preferences, allowlistRepository, starManager)
     }
+    val appSuspendController: AppSuspendController by lazy {
+        AppSuspendController(appContext, preferences)
+    }
+    val keepAliveRepository: KeepAliveRepository by lazy {
+        KeepAliveRepository(preferences)
+    }
+    val appCatalog: AppCatalog by lazy { AppCatalog(appContext) }
     val focusModeController: FocusModeController by lazy {
-        FocusModeController(appContext, preferences, dndController)
+        FocusModeController(
+            appContext,
+            preferences,
+            dndController,
+            appSuspendController,
+            applicationScope,
+        )
     }
 
     fun init(context: Context) {

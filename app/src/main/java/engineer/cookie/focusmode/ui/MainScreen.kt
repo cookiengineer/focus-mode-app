@@ -9,22 +9,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -41,14 +38,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import engineer.cookie.focusmode.R
 import engineer.cookie.focusmode.data.AllowedContact
 import engineer.cookie.focusmode.data.PhoneEntry
+import engineer.cookie.focusmode.freeze.UserApp
 import engineer.cookie.focusmode.util.AccessState
 import engineer.cookie.focusmode.util.SpecialAccess
 import kotlinx.coroutines.launch
@@ -60,10 +60,15 @@ fun MainScreen(viewModel: MainViewModel) {
     val access by viewModel.access.collectAsStateWithLifecycle()
     val allowlist by viewModel.allowlist.collectAsStateWithLifecycle()
     val isActive by viewModel.isActive.collectAsStateWithLifecycle()
+    val keepAlive by viewModel.keepAlive.collectAsStateWithLifecycle()
+    val userApps by viewModel.userApps.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var pendingNumbers by remember { mutableStateOf<List<PhoneEntry>?>(null) }
+    var showDeviceOwnerDialog by remember { mutableStateOf(false) }
+    var showAppPicker by remember { mutableStateOf(false) }
+    val appLabels = remember(userApps) { userApps.associate { it.packageName to it.label } }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -82,13 +87,6 @@ fun MainScreen(viewModel: MainViewModel) {
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { contactLauncher.launch(null) },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Add contact") },
-            )
-        },
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -112,15 +110,30 @@ fun MainScreen(viewModel: MainViewModel) {
                     onRequestRole = {
                         SpecialAccess.callScreeningRoleIntent(context)?.let { settingsLauncher.launch(it) }
                     },
+                    onOpenDeviceOwner = { showDeviceOwnerDialog = true },
                 )
             }
-            item { SectionHeader("Allowed contacts") }
-            if (allowlist.isEmpty()) {
-                item { EmptyState() }
-            } else {
-                items(allowlist, key = { it.id }) { contact ->
-                    AllowlistRow(contact = contact, onRemove = { viewModel.remove(contact) })
+            if (access.deviceOwner) {
+                item {
+                    DeviceOwnerCard(onDeactivate = viewModel::deactivateDeviceOwner)
                 }
+            }
+            item { SectionHeader("Allowed Contacts") }
+            item {
+                ContactsCard(
+                    contacts = allowlist,
+                    onRemove = { viewModel.remove(it) },
+                    onAdd = { contactLauncher.launch(null) },
+                )
+            }
+            item { SectionHeader("Allowed Apps") }
+            item {
+                AllowedAppsCard(
+                    kept = keepAlive,
+                    labels = appLabels,
+                    onAdd = { showAppPicker = true },
+                    onRemove = { viewModel.setKept(it, false) },
+                )
             }
         }
     }
@@ -139,6 +152,22 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 }
             },
+        )
+    }
+
+    if (showDeviceOwnerDialog) {
+        DeviceOwnerDialog(
+            command = SpecialAccess.deviceOwnerCommand(context),
+            onDismiss = { showDeviceOwnerDialog = false },
+        )
+    }
+
+    if (showAppPicker) {
+        AppPickerDialog(
+            apps = userApps,
+            kept = keepAlive,
+            onToggle = viewModel::setKept,
+            onDismiss = { showAppPicker = false },
         )
     }
 }
@@ -171,6 +200,12 @@ private fun FocusToggleCard(isActive: Boolean, access: AccessState, onToggle: (B
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
+                } else if (!access.deviceOwner) {
+                    Text(
+                        text = "Other apps are not frozen yet. Set Focus Mode as device owner below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
             Switch(
@@ -188,6 +223,7 @@ private fun SetupCard(
     onRequestPermissions: () -> Unit,
     onOpenDnd: () -> Unit,
     onRequestRole: () -> Unit,
+    onOpenDeviceOwner: () -> Unit,
 ) {
     if (access.allGranted) return
 
@@ -219,8 +255,170 @@ private fun SetupCard(
                 granted = access.callScreeningRole,
                 onGrant = onRequestRole,
             )
+            AccessRow(
+                label = "Freeze other apps (device owner)",
+                granted = access.deviceOwner,
+                onGrant = onOpenDeviceOwner,
+            )
         }
     }
+}
+
+@Composable
+private fun DeviceOwnerCard(onDeactivate: () -> Unit) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Device owner active", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Focus Mode can freeze other user apps.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            TextButton(onClick = onDeactivate) { Text("Deactivate") }
+        }
+    }
+}
+
+@Composable
+private fun DeviceOwnerDialog(command: String, onDismiss: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    clipboard.setText(AnnotatedString(command))
+                    onDismiss()
+                },
+            ) { Text("Copy command") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Freeze other apps") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "To stop other apps while Focus Mode is on, Focus Mode must become " +
+                        "the device owner. This is a one-time, root-free step done from a " +
+                        "computer with ADB:",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(command, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "The device must have no accounts (no Google, Nextcloud, work profile, " +
+                        "etc.) when you run this. Afterwards, toggle Focus Mode on.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun AllowedAppsCard(
+    kept: Set<String>,
+    labels: Map<String, String>,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "These apps stay running while Focus Mode is on.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (kept.isEmpty()) {
+                Text("No apps added yet.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                kept.sortedBy { (labels[it] ?: it).lowercase() }.forEach { packageName ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = labels[packageName] ?: packageName,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TextButton(onClick = { onRemove(packageName) }) { Text("Remove") }
+                    }
+                }
+            }
+            TextButton(onClick = onAdd) { Text("Add app") }
+        }
+    }
+}
+
+@Composable
+private fun AppPickerDialog(
+    apps: List<UserApp>,
+    kept: Set<String>,
+    onToggle: (String, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        title = { Text("Keep running") },
+        text = {
+            if (apps.isEmpty()) {
+                Text("No apps found.")
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    items(
+                        apps.sortedByDescending { it.packageName in kept },
+                        key = { it.packageName },
+                    ) { app ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = app.label,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = app.packageName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Switch(
+                                checked = app.packageName in kept,
+                                onCheckedChange = { onToggle(app.packageName, it) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -260,45 +458,56 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun EmptyState() {
+private fun ContactsCard(
+    contacts: List<AllowedContact>,
+    onRemove: (AllowedContact) -> Unit,
+    onAdd: () -> Unit,
+) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "No contacts yet. Tap \"Add contact\" to allow someone through in Focus Mode.",
-            modifier = Modifier.padding(16.dp),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (contacts.isEmpty()) {
+                Text(
+                    "No contacts yet. Add someone to allow them through in Focus Mode.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                contacts.forEach { contact ->
+                    ContactRow(contact = contact, onRemove = { onRemove(contact) })
+                }
+            }
+            TextButton(onClick = onAdd) { Text("Add contact") }
+        }
     }
 }
 
 @Composable
-private fun AllowlistRow(contact: AllowedContact, onRemove: () -> Unit) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.Person, contentDescription = null)
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = contact.displayName,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = contact.rawNumber,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Filled.Delete, contentDescription = "Remove")
-            }
+private fun ContactRow(contact: AllowedContact, onRemove: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Person, contentDescription = null)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = contact.displayName,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = contact.rawNumber,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+        TextButton(onClick = onRemove) { Text("Remove") }
     }
 }
 

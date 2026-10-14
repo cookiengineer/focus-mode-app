@@ -53,6 +53,24 @@ class FocusModePreferences(context: Context) {
             .putStringSet(KEY_SELF_STARRED_IDS, value.map { it.toString() }.toSet())
             .apply()
 
+    /** Packages Focus Mode suspended, so they can be restored exactly on shutdown. */
+    var suspendedPackages: Set<String>
+        get() = prefs.getStringSet(KEY_SUSPENDED_PACKAGES, emptySet()) ?: emptySet()
+        set(value) = prefs.edit()
+            .putStringSet(KEY_SUSPENDED_PACKAGES, value)
+            .apply()
+
+    /** User apps that are never frozen, even while Focus Mode is active. */
+    var neverFreezePackages: Set<String>
+        get() = prefs.getStringSet(KEY_NEVER_FREEZE_PACKAGES, emptySet()) ?: emptySet()
+        set(value) = prefs.edit()
+            .putStringSet(KEY_NEVER_FREEZE_PACKAGES, value)
+            .apply()
+
+    var keepAliveSeeded: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_ALIVE_SEEDED, false)
+        set(value) = prefs.edit().putBoolean(KEY_KEEP_ALIVE_SEEDED, value).apply()
+
     fun clearSavedPolicy() {
         prefs.edit()
             .remove(KEY_INTERRUPTION_FILTER)
@@ -75,6 +93,9 @@ class FocusModePreferences(context: Context) {
         const val KEY_POLICY_CONVERSATION_SENDERS = "saved_policy_conversation_senders"
         const val KEY_POLICY_SUPPRESSED_EFFECTS = "saved_policy_suppressed_effects"
         const val KEY_SELF_STARRED_IDS = "self_starred_ids"
+        const val KEY_SUSPENDED_PACKAGES = "suspended_packages"
+        const val KEY_NEVER_FREEZE_PACKAGES = "never_freeze_packages"
+        const val KEY_KEEP_ALIVE_SEEDED = "keep_alive_seeded"
         const val DEFAULT_INTERRUPTION_FILTER = 1 // NotificationManager.INTERRUPTION_FILTER_ALL
     }
 }

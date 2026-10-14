@@ -7,9 +7,11 @@ import androidx.lifecycle.viewModelScope
 import engineer.cookie.focusmode.AppGraph
 import engineer.cookie.focusmode.data.AllowedContact
 import engineer.cookie.focusmode.data.PhoneEntry
+import engineer.cookie.focusmode.freeze.UserApp
 import engineer.cookie.focusmode.util.AccessState
 import engineer.cookie.focusmode.util.PhoneNormalizer
 import engineer.cookie.focusmode.util.SpecialAccess
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,14 +29,34 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
 
     val isActive: StateFlow<Boolean> = AppGraph.focusModeController.isActive
 
+    val keepAlive: StateFlow<Set<String>> = AppGraph.keepAliveRepository.packages
+
+    private val _userApps = MutableStateFlow<List<UserApp>>(emptyList())
+    val userApps: StateFlow<List<UserApp>> = _userApps.asStateFlow()
+
     val runtimePermissions: Array<String> = SpecialAccess.runtimePermissions
+
+    init {
+        viewModelScope.launch(Dispatchers.Default) {
+            _userApps.value = runCatching { AppGraph.appCatalog.userApps() }.getOrDefault(emptyList())
+        }
+    }
 
     fun refreshAccess() {
         _access.value = SpecialAccess.current(app)
     }
 
+    fun setKept(packageName: String, kept: Boolean) {
+        AppGraph.keepAliveRepository.setKept(packageName, kept)
+    }
+
     fun setEnabled(enabled: Boolean) {
         AppGraph.focusModeController.setEnabled(enabled)
+        refreshAccess()
+    }
+
+    fun deactivateDeviceOwner() {
+        AppGraph.appSuspendController.deactivateDeviceOwner()
         refreshAccess()
     }
 
