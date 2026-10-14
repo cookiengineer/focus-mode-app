@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Focus Mode</string>
+
+    <string name="notification_channel_name">Focus Mode status</string>
+    <string name="notification_channel_description">Persistent notification shown while Focus Mode is active.</string>
+    <string name="notification_title">Focus Mode is active</string>
+    <string name="notification_text">Only your allowlisted contacts can reach you.</string>
+    <string name="notification_action_disable">Turn off</string>
+</resources>
