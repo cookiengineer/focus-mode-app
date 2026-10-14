@@ -5,6 +5,8 @@ all calls and notifications, except from an allowlist of emergency contacts.
 
 ## Features
 
+![Screenshot](screenshot.png)
+
 - Pick contacts from the system Contacts app to add them to the Allowlist.
 - Toggle **Focus Mode**: enables Do Not Disturb priority mode, allowing only
   calls/messages from allowlisted (starred) contacts.
