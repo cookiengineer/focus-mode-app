@@ -336,7 +336,7 @@ private fun AllowedAppsCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                "These apps stay running while Focus Mode is on.",
+                "These apps can run and display notifications while Focus Mode is on.",
                 style = MaterialTheme.typography.bodySmall,
             )
             if (kept.isEmpty()) {
@@ -470,9 +470,13 @@ private fun ContactsCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Text(
+                "These contacts can call or message you while Focus Mode is on.",
+                style = MaterialTheme.typography.bodySmall,
+            )
             if (contacts.isEmpty()) {
                 Text(
-                    "No contacts yet. Add someone to allow them through in Focus Mode.",
+                    "No contacts added yet.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
