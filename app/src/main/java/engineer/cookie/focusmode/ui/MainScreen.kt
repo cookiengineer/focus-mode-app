@@ -403,7 +403,11 @@ private fun AppPickerDialog(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    text = app.packageName,
+                                    text = if (app.isSystem) {
+                                        "${app.packageName} \u00b7 system"
+                                    } else {
+                                        app.packageName
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,

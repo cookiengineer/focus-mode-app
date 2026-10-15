@@ -1,16 +1,11 @@
 package engineer.cookie.focusmode.freeze
 
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
-import android.provider.Telephony
-import android.telecom.TelecomManager
-import android.view.accessibility.AccessibilityManager
 import engineer.cookie.focusmode.admin.FocusDeviceAdminReceiver
 import engineer.cookie.focusmode.focus.FocusModePreferences
 
@@ -21,7 +16,7 @@ data class SuspendResult(
 )
 
 /**
- * Freezes other user apps while Focus Mode is active by suspending them as the
+ * Freezes other apps while Focus Mode is active by suspending them as the
  * device owner.
  *
  * A suspended package cannot start activities, its notifications are hidden, it
@@ -36,6 +31,7 @@ class AppSuspendController(
 ) {
 
     private val appContext = context.applicationContext
+    private val protection = AppProtection(appContext)
     private val devicePolicyManager: DevicePolicyManager?
         get() = appContext.getSystemService(DevicePolicyManager::class.java)
 
@@ -46,7 +42,7 @@ class AppSuspendController(
         devicePolicyManager?.isDeviceOwnerApp(appContext.packageName) == true
 
     /**
-     * Suspends every eligible user app and remembers which ones succeeded so they
+     * Suspends every eligible app and remembers which ones succeeded so they
      * can be restored exactly on shutdown. No-op when not the device owner.
      */
     fun suspendUserApps(): SuspendResult {
@@ -93,11 +89,8 @@ class AppSuspendController(
         AppFilter.selectTargets(
             installed = installedApps(),
             ownPackage = appContext.packageName,
-            defaultDialer = defaultDialerPackage(),
-            defaultSms = defaultSmsPackage(),
-            defaultIme = defaultImePackage(),
-            accessibilityPackages = enabledAccessibilityPackages(),
-            deviceAdminPackages = deviceAdminPackages(),
+            protectedPackages = protection.protectedPackages(),
+            launchablePackages = protection.launchablePackages(),
             neverFreezePackages = preferences.neverFreezePackages,
         )
 
@@ -117,32 +110,4 @@ class AppSuspendController(
             )
         }
     }
-
-    private fun defaultDialerPackage(): String? =
-        runCatching {
-            appContext.getSystemService(TelecomManager::class.java)?.defaultDialerPackage
-        }.getOrNull()
-
-    private fun defaultSmsPackage(): String? =
-        runCatching { Telephony.Sms.getDefaultSmsPackage(appContext) }.getOrNull()
-
-    private fun defaultImePackage(): String? =
-        runCatching {
-            Settings.Secure.getString(
-                appContext.contentResolver,
-                Settings.Secure.DEFAULT_INPUT_METHOD,
-            )?.substringBefore('/')
-        }.getOrNull()
-
-    private fun enabledAccessibilityPackages(): Set<String> = runCatching {
-        appContext.getSystemService(AccessibilityManager::class.java)
-            ?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            ?.mapNotNull { it.resolveInfo?.serviceInfo?.packageName }
-            ?.toSet()
-            .orEmpty()
-    }.getOrDefault(emptySet())
-
-    private fun deviceAdminPackages(): Set<String> = runCatching {
-        devicePolicyManager?.activeAdmins?.map { it.packageName }?.toSet().orEmpty()
-    }.getOrDefault(emptySet())
 }

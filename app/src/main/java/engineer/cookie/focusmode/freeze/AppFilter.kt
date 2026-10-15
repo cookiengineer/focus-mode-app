@@ -7,36 +7,32 @@ data class InstalledApp(
 )
 
 /**
- * Decides which user apps Focus Mode should suspend.
+ * Decides which apps Focus Mode should suspend.
  *
- * Suspending a system app can destabilise the phone, and suspending the current
- * keyboard, an accessibility service, a device admin, the launcher, the default
- * dialer or the default SMS app would break core functionality. All of those are
- * excluded here.
+ * Third-party apps are always eligible. Preinstalled (system) apps are only
+ * eligible when they are user-facing - i.e. they expose a launcher activity - so
+ * background system components are never touched. Anything in [protectedPackages]
+ * (launcher, SystemUI, Settings, Contacts, file picker, default dialer/SMS,
+ * enabled keyboards, accessibility services, device admins) or in
+ * [neverFreezePackages] (the user's allowlist) is excluded, as is Focus Mode
+ * itself.
  */
 object AppFilter {
 
     fun selectTargets(
         installed: List<InstalledApp>,
         ownPackage: String,
-        defaultDialer: String?,
-        defaultSms: String?,
-        defaultIme: String?,
-        accessibilityPackages: Set<String>,
-        deviceAdminPackages: Set<String>,
+        protectedPackages: Set<String>,
+        launchablePackages: Set<String>,
         neverFreezePackages: Set<String> = emptySet(),
     ): List<String> {
         val excluded = HashSet<String>()
         excluded.add(ownPackage)
-        defaultDialer?.let(excluded::add)
-        defaultSms?.let(excluded::add)
-        defaultIme?.let(excluded::add)
-        excluded.addAll(accessibilityPackages)
-        excluded.addAll(deviceAdminPackages)
+        excluded.addAll(protectedPackages)
         excluded.addAll(neverFreezePackages)
 
         return installed.asSequence()
-            .filterNot { it.isSystem }
+            .filter { !it.isSystem || it.packageName in launchablePackages }
             .map { it.packageName }
             .filterNot { it in excluded }
             .distinct()

@@ -49,9 +49,14 @@ class DndController(
             preferences.selfStarredIds = preferences.selfStarredIds + newStars
         }
 
+        // Media and alarms must stay in the priority categories: a policy that
+        // omits PRIORITY_CATEGORY_MEDIA makes AudioService mute STREAM_MUSIC for
+        // as long as priority mode is active, which also silences the Music app.
         val categories = NotificationManager.Policy.PRIORITY_CATEGORY_CALLS or
             NotificationManager.Policy.PRIORITY_CATEGORY_MESSAGES or
-            NotificationManager.Policy.PRIORITY_CATEGORY_CONVERSATIONS
+            NotificationManager.Policy.PRIORITY_CATEGORY_CONVERSATIONS or
+            NotificationManager.Policy.PRIORITY_CATEGORY_MEDIA or
+            NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS
 
         val policy = NotificationManager.Policy(
             categories,

@@ -10,12 +10,17 @@ all calls and notifications, except from an allowlist of emergency contacts.
 - Pick contacts from the system Contacts app to add them to the Allowlist.
 - Toggle **Focus Mode**: enables Do Not Disturb priority mode, allowing only
   calls/messages from allowlisted (starred) contacts.
-- Freezes (suspends) all other user apps while Focus Mode is active, so they
-  cannot run or notify you. Their icons stay on the launcher but are greyed out
-  and cannot be opened.
+- Freezes (suspends) all other user-facing apps while Focus Mode is active, so
+  they cannot run or notify you. Their icons stay on the launcher but are greyed
+  out and cannot be opened. This covers third-party apps as well as preinstalled
+  apps (Music, Gallery, Browser, ...); core system components (launcher,
+  SystemUI, Settings, Contacts, the file picker, the default dialer/SMS, the
+  keyboard) are never frozen.
 - Keeps a configurable list of apps running (never frozen), e.g. a firewall or
   browser. NetGuard (`eu.faircode.netguard`) and Fennec (`org.mozilla.fennec_fdroid`)
   are kept by default; manage the list under "Allowed Apps".
+- Keeps media playback and alarms audible while Focus Mode is on - only
+  notifications and other apps are silenced.
 - Rejects incoming calls from anyone not on the allowlist (Call Screening role).
 - Runs as a foreground service with a silent, persistent status notification.
 - No network permissions, no Google services.

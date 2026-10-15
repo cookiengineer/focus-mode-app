@@ -8,32 +8,25 @@ import org.junit.Test
 class AppFilterTest {
 
     private val own = "engineer.cookie.focusmode"
-    private val dialer = "org.lineageos.dialer"
-    private val sms = "com.android.messaging"
-    private val ime = "com.android.inputmethod.latin"
 
     private fun targets(
         installed: List<InstalledApp>,
-        accessibility: Set<String> = emptySet(),
-        admins: Set<String> = emptySet(),
+        protected: Set<String> = emptySet(),
+        launchable: Set<String> = emptySet(),
         neverFreeze: Set<String> = emptySet(),
     ) = AppFilter.selectTargets(
         installed = installed,
         ownPackage = own,
-        defaultDialer = dialer,
-        defaultSms = sms,
-        defaultIme = ime,
-        accessibilityPackages = accessibility,
-        deviceAdminPackages = admins,
+        protectedPackages = protected,
+        launchablePackages = launchable,
         neverFreezePackages = neverFreeze,
     )
 
     @Test
-    fun keepsOnlyThirdPartyUserApps() {
+    fun keepsThirdPartyApps() {
         val installed = listOf(
             InstalledApp("com.example.chat", isSystem = false),
             InstalledApp("com.example.news", isSystem = false),
-            InstalledApp("com.android.systemui", isSystem = true),
             InstalledApp("com.example.clock", isSystem = false),
         )
         assertEquals(
@@ -43,48 +36,62 @@ class AppFilterTest {
     }
 
     @Test
-    fun excludesSystemApps() {
+    fun keepsLaunchableSystemApps() {
         val installed = listOf(
-            InstalledApp("com.android.settings", isSystem = true),
+            InstalledApp("org.lineageos.eleven", isSystem = true),
+            InstalledApp("com.android.gallery3d", isSystem = true),
+            InstalledApp("com.example.chat", isSystem = false),
+        )
+        assertEquals(
+            listOf("com.android.gallery3d", "com.example.chat", "org.lineageos.eleven"),
+            targets(
+                installed,
+                launchable = setOf("org.lineageos.eleven", "com.android.gallery3d"),
+            ),
+        )
+    }
+
+    @Test
+    fun excludesNonLaunchableSystemApps() {
+        val installed = listOf(
+            InstalledApp("com.android.providers.media", isSystem = true),
+            InstalledApp("com.android.systemui", isSystem = true),
             InstalledApp("com.example.game", isSystem = false),
         )
         assertEquals(listOf("com.example.game"), targets(installed))
     }
 
     @Test
-    fun excludesFocusModeItself() {
+    fun excludesProtectedPackages() {
         val installed = listOf(
-            InstalledApp(own, isSystem = false),
-            InstalledApp("com.example.music", isSystem = false),
-        )
-        assertEquals(listOf("com.example.music"), targets(installed))
-    }
-
-    @Test
-    fun excludesCriticalCommsAndInputApps() {
-        val installed = listOf(
-            InstalledApp(dialer, isSystem = false),
-            InstalledApp(sms, isSystem = false),
-            InstalledApp(ime, isSystem = false),
-            InstalledApp("com.example.video", isSystem = false),
-        )
-        assertEquals(listOf("com.example.video"), targets(installed))
-    }
-
-    @Test
-    fun excludesAccessibilityServicesAndDeviceAdmins() {
-        val installed = listOf(
-            InstalledApp("com.example.talkback", isSystem = false),
-            InstalledApp("com.example.mdm", isSystem = false),
+            InstalledApp("com.android.settings", isSystem = true),
+            InstalledApp("com.android.documentsui", isSystem = true),
+            InstalledApp("org.lineageos.eleven", isSystem = true),
             InstalledApp("com.example.browser", isSystem = false),
         )
         assertEquals(
-            listOf("com.example.browser"),
+            listOf("com.example.browser", "org.lineageos.eleven"),
             targets(
                 installed,
-                accessibility = setOf("com.example.talkback"),
-                admins = setOf("com.example.mdm"),
+                protected = setOf("com.android.settings", "com.android.documentsui"),
+                launchable = setOf(
+                    "com.android.settings",
+                    "com.android.documentsui",
+                    "org.lineageos.eleven",
+                ),
             ),
+        )
+    }
+
+    @Test
+    fun excludesFocusModeItself() {
+        val installed = listOf(
+            InstalledApp(own, isSystem = false),
+            InstalledApp("org.lineageos.eleven", isSystem = true),
+        )
+        assertEquals(
+            listOf("org.lineageos.eleven"),
+            targets(installed, launchable = setOf("org.lineageos.eleven")),
         )
     }
 
@@ -93,12 +100,14 @@ class AppFilterTest {
         val installed = listOf(
             InstalledApp("eu.faircode.netguard", isSystem = false),
             InstalledApp("org.mozilla.fennec_fdroid", isSystem = false),
+            InstalledApp("org.lineageos.eleven", isSystem = true),
             InstalledApp("com.example.chat", isSystem = false),
         )
         assertEquals(
-            listOf("com.example.chat"),
+            listOf("com.example.chat", "org.lineageos.eleven"),
             targets(
                 installed,
+                launchable = setOf("org.lineageos.eleven"),
                 neverFreeze = setOf("eu.faircode.netguard", "org.mozilla.fennec_fdroid"),
             ),
         )
