@@ -84,7 +84,37 @@ what the device owner can do and how to reverse it.
 
 ## Building
 
-The App is built inside a Podman container. No host Android SDK required.
+The app is built inside a Podman container via a `Makefile`. No host Android
+SDK required.
+
+```sh
+make;             # debug + release APKs
+make debug;       # debug APK (app-debug.apk)
+make release;     # signed release APK (app-release.apk)
+make help;        # list all targets
+```
+
+The first run builds the Podman builder image automatically; rebuild it
+explicitly with `make rebuild-image`. Run `make distclean` to remove build
+output, caches and the image.
+
+Release builds are signed using `keystore.properties` (see `keystore/` folder).
+If that file is absent it falls back to the debug key.
+
+The build outputs the following APK files:
+
+- `app/build/outputs/apk/debug/app-debug.apk`
+- `app/build/outputs/apk/release/app-release.apk`
+
+Install on a device locally via ADB (defaults to the release APK; override with
+`APK=path`):
+
+```sh
+make install;
+APK=app/build/outputs/apk/debug/app-debug.apk make install;
+```
+
+The raw build script is still available if you need an arbitrary Gradle task:
 
 ```sh
 scripts/build.sh assembleDebug;          # debug APK
@@ -92,19 +122,18 @@ scripts/build.sh assembleRelease;        # signed release APK
 scripts/build.sh --rebuild assembleDebug;
 ```
 
-Release builds are signed using `keystore.properties` (see `keystore/` folder).
-If that file is absent it falls back to the debug key.
+## Testing
 
-The build script outputs the following APK files:
-
-- `app/build/outputs/apk/debug/app-debug.apk`
-- `app/build/outputs/apk/release/app-release.apk`
-
-Install on a device locally via ADB:
+Unit tests run on the JVM inside the same Podman container, so no device or
+emulator is required.
 
 ```sh
-adb install -r app/build/outputs/apk/release/app-release.apk;
+make test;        # JVM unit tests (testDebugUnitTest)
+make lint;        # Android lint
 ```
+
+`make test` runs the unit tests under `app/src/test/`. Instrumented tests are
+not part of the default build.
 
 ## License
 
